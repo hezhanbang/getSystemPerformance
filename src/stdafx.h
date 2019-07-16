@@ -8,10 +8,18 @@
 #include "targetver.h"
 
 #define WIN32_LEAN_AND_MEAN             // Exclude rarely-used stuff from Windows headers
+
 // Windows Header Files:
+#include <winsock2.h>
 #include <windows.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-
+#include <string.h>
+#include <assert.h>
+#include <WS2tcpip.h>
+#include <iphlpapi.h>
+#pragma comment(lib, "IPHLPAPI.lib")
+#pragma comment(lib, "Ws2_32.lib")
 
 // TODO: reference additional headers your program requires here
