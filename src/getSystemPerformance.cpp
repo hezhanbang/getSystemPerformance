@@ -5,18 +5,11 @@
 #include "getSystemPerformance.h"
 
 
-// This is an example of an exported variable
-GETSYSTEMPERFORMANCE_API int ngetSystemPerformance=0;
-
-// This is an example of an exported function.
-GETSYSTEMPERFORMANCE_API int fngetSystemPerformance(void)
+GETSYSTEMPERFORMANCE_API INT32 hebPerformanceTest(char* msg, char* outMsg, INT32 outCap)
 {
-    return 42;
-}
+	if (nullptr == msg || nullptr == outMsg || outCap < 100) {
+		return -1;
+	}
 
-// This is the constructor of a class that has been exported.
-// see getSystemPerformance.h for the class definition
-CgetSystemPerformance::CgetSystemPerformance()
-{
-    return;
+	return sprintf_s(outMsg, outCap, "hi, i am c++ performance dll, i have got your msg \"%s\"\n", msg);
 }

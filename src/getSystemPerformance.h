@@ -10,13 +10,4 @@
 #define GETSYSTEMPERFORMANCE_API __declspec(dllimport)
 #endif
 
-// This class is exported from the getSystemPerformance.dll
-class GETSYSTEMPERFORMANCE_API CgetSystemPerformance {
-public:
-	CgetSystemPerformance(void);
-	// TODO: add your methods here.
-};
-
-extern GETSYSTEMPERFORMANCE_API int ngetSystemPerformance;
-
-GETSYSTEMPERFORMANCE_API int fngetSystemPerformance(void);
+GETSYSTEMPERFORMANCE_API INT32 hebPerformanceTest(char* msg, char* outMsg, INT32 outCap);
