@@ -4,8 +4,7 @@
 #include "stdafx.h"
 #include "getSystemPerformance.h"
 
-
-GETSYSTEMPERFORMANCE_API INT32 hebTest(char* msg, char* outMsg, int outCap)
+GETSYSTEMPERFORMANCE_API INT32 hebPerformanceTest(char* msg, char* outMsg, INT32 outCap)
 {
 	if (nullptr == msg || nullptr == outMsg || outCap < 100) {
 		return -1;

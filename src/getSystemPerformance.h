@@ -5,9 +5,9 @@
 // GETSYSTEMPERFORMANCE_API functions as being imported from a DLL, whereas this DLL sees symbols
 // defined with this macro as being exported.
 #ifdef GETSYSTEMPERFORMANCE_EXPORTS
-#define GETSYSTEMPERFORMANCE_API __declspec(dllexport)
+#define GETSYSTEMPERFORMANCE_API __declspec(dllexport) extern "C"
 #else
-#define GETSYSTEMPERFORMANCE_API __declspec(dllimport)
+#define GETSYSTEMPERFORMANCE_API __declspec(dllimport) extern "C"
 #endif
 
-GETSYSTEMPERFORMANCE_API INT32 hebTest(char* msg, char* outMsg);
+GETSYSTEMPERFORMANCE_API INT32 hebPerformanceTest(char* msg, char* outMsg, INT32 outCap);
