@@ -4,11 +4,19 @@
 #include "stdafx.h"
 #include "getSystemPerformance.h"
 
-GETSYSTEMPERFORMANCE_API INT32 hebPerformanceTest(char* msg, char* outMsg, INT32 outCap)
-{
-	if (nullptr == msg || nullptr == outMsg || outCap < 100) {
-		return -1;
-	}
 
-	return sprintf_s(outMsg, outCap, "hi, i am c++ performance dll, i have got your msg \"%s\"\n", msg);
+// This is an example of an exported variable
+GETSYSTEMPERFORMANCE_API int ngetSystemPerformance=0;
+
+// This is an example of an exported function.
+GETSYSTEMPERFORMANCE_API int fngetSystemPerformance(void)
+{
+    return 42;
+}
+
+// This is the constructor of a class that has been exported.
+// see getSystemPerformance.h for the class definition
+CgetSystemPerformance::CgetSystemPerformance()
+{
+    return;
 }
