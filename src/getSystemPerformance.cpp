@@ -101,6 +101,7 @@ int hebInit() {
 	do {
 		pAddresses = (IP_ADAPTER_ADDRESSES *)malloc(outBufCap);
 
+		//https://docs.microsoft.com/en-us/windows/win32/api/iphlpapi/nf-iphlpapi-getadaptersaddresses
 		dwRetVal = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_PREFIX, NULL, pAddresses, &outBufCap);
 		if (ERROR_BUFFER_OVERFLOW == dwRetVal) {
 			free(pAddresses);
