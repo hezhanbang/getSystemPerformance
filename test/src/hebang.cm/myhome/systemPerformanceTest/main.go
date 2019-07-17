@@ -2,7 +2,7 @@ package main
 
 import "C"
 import (
-	"encoding/json"
+	"bytes"
 	"encoding/xml"
 	"fmt"
 	"log"
@@ -55,10 +55,10 @@ func main() {
 
 		strLen := int(retDll)
 		jsonStr := string(outSlice[:strLen])
-		fmt.Printf("%s", jsonStr)
+		//fmt.Printf("%s\n", jsonStr)
 
 		data := allAdapterStatus{}
-		err = jsonStr2Obj(&jsonStr, &data)
+		err = xmlStr2Obj(&jsonStr, &data)
 		if nil != err {
 			log.Printf("fail to parse adapter json string, err=%s\n", err)
 			return
@@ -73,8 +73,10 @@ func main() {
 	}
 }
 
-func jsonStr2Obj(str *string, c interface{}) (err error) {
-	err = json.Unmarshal([]byte(*str), c)
+func xmlStr2Obj(str *string, obj interface{}) (err error) {
+	reader := bytes.NewReader([]byte(*str))
+	decoder := xml.NewDecoder(reader)
+	err = decoder.Decode(obj)
 	return
 }
 
@@ -85,7 +87,7 @@ type allAdapterStatus struct {
 
 type adapterInfo struct {
 	Name        string         `xml:"name"`
-	MaxSpeedBit int            `xml:"maxSpeedBit"`
+	MaxSpeedBit int64          `xml:"maxSpeedBit"`
 	RecvSpeed   directionSpeed `xml:"recvSpeed"`
 	Sendpeed    directionSpeed `xml:"sendSpeed"`
 }

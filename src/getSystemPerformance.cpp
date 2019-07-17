@@ -389,7 +389,7 @@ INT32 hebGetSpeed(std::chrono::time_point<std::chrono::system_clock> &startTime,
 	std::chrono::duration<double> duration = endTime - startTime;
 	double diffTime = 1.0 /*duration.count()*/;
 
-	result = "<root>";
+	result = "<?xml version=\"1.0\"?><root>";
 	bool bHaveAdapter = false;
 	char oneDeviceResult[512];
 	char utf8Name[sizeof(gHebStatus->interfaces[0].name)];
@@ -400,13 +400,24 @@ INT32 hebGetSpeed(std::chrono::time_point<std::chrono::system_clock> &startTime,
 			continue;
 		}
 
-		int64_t diffRecv = statusInfo.dwNowTotalRecvByte - statusInfo.dwLastTotalRecvByte;
-		int64_t diffSend = statusInfo.dwNowTotalSendByte - statusInfo.dwLastTotalSendByte;
+		int64_t diffRecvByte = statusInfo.dwNowTotalRecvByte - statusInfo.dwLastTotalRecvByte;
+		int64_t diffSendByte = statusInfo.dwNowTotalSendByte - statusInfo.dwLastTotalSendByte;
 
-		double recvSpeedByte = diffRecv * 8 / diffTime;
-		double sendSpeedByte = diffSend / diffTime;
+		double recvSpeedByte = diffRecvByte / diffTime;
+		double sendSpeedByte = diffSendByte / diffTime;
 		int64_t iRecvSpeedBit = recvSpeedByte * 8;
 		int64_t iSendSpeedBit = sendSpeedByte * 8;
+
+		if (diffRecvByte < 0) {
+			diffRecvByte = -1;
+			recvSpeedByte = -1;
+			iRecvSpeedBit = -1;
+		}
+		if (diffSendByte < 0) {
+			diffSendByte = -1;
+			sendSpeedByte = -1;
+			iSendSpeedBit = -1;
+		}
 
 		//printf_s("adapter[%s]: recvSpeed=%s, sendSpeed=%s\n", statusInfo.name, hebFormatSpeed(recvSpeedByte).c_str(), hebFormatSpeed(sendSpeedByte).c_str());
 
