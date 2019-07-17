@@ -64,7 +64,7 @@ func main() {
 		}
 
 		for _, adapter := range data.Adapters {
-			fmt.Printf("adapter[%s, %d] recvSpeed=%s, sendSpeed=%s\n", adapter.Name, adapter.MaxSpeedBit, adapter.RecvSpeed.Str, adapter.Sendpeed.Str)
+			fmt.Printf("adapter[%s, %s, %d] recvSpeed=%s, sendSpeed=%s\n", adapter.Name, adapter.IPs, adapter.MaxSpeedBit, adapter.RecvSpeed.Str, adapter.Sendpeed.Str)
 		}
 		fmt.Println("")
 	}
@@ -84,6 +84,7 @@ type allAdapterStatus struct {
 
 type adapterInfo struct {
 	Name        string         `xml:"name"`
+	IPs         string         `xml:"ip"`
 	MaxSpeedBit int64          `xml:"maxSpeedBit"`
 	RecvSpeed   directionSpeed `xml:"recvSpeed"`
 	Sendpeed    directionSpeed `xml:"sendSpeed"`

@@ -202,6 +202,7 @@ int32_t handleOneInterface(PIP_ADAPTER_ADDRESSES pCurrAddresses, HebInterfaceInf
 	delete(friendlyName);
 
 	//获取本网卡的多个本地IP地址
+	oneInfo.allIP = "";
 	PIP_ADAPTER_UNICAST_ADDRESS pUnicast = pCurrAddresses->FirstUnicastAddress;
 	if (pUnicast != NULL) {
 		for (int i = 0; pUnicast != NULL; i++) {
@@ -431,15 +432,16 @@ INT32 hebGetSpeed(std::chrono::time_point<std::chrono::system_clock> &startTime,
 		int len = sprintf_s(
 			oneDeviceResult,
 			sizeof(oneDeviceResult),
-			"<adapter><name>%s</name><maxSpeedBit>%lu</maxSpeedBit><recvSpeed><bit>%lld</bit><str>%s</str></recvSpeed><sendSpeed><bit>%lld</bit><str>%s</str></sendSpeed></adapter>",
+			"<adapter><name>%s</name><ip>%s</ip><maxSpeedBit>%lu</maxSpeedBit><recvSpeed><bit>%lld</bit><str>%s</str></recvSpeed><sendSpeed><bit>%lld</bit><str>%s</str></sendSpeed></adapter>",
 			adapterName,
+			statusInfo.allIP.c_str(),
 			statusInfo.MaxSpeedBps,
 			iRecvSpeedBit,
 			hebFormatSpeed(recvSpeedByte).c_str(),
 			iSendSpeedBit,
 			hebFormatSpeed(sendSpeedByte).c_str()
 		);
-		assert(len + 5 < sizeof(str));
+		assert(len + 5 < sizeof(oneDeviceResult));
 
 		result += oneDeviceResult;
 		bHaveAdapter = true;
