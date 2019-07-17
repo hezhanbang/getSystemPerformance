@@ -6,6 +6,8 @@ import (
 	"encoding/xml"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"syscall"
 	"unsafe"
 )
@@ -13,9 +15,15 @@ import (
 func main() {
 	log.Println("start...")
 
-	libHandle, err := syscall.LoadLibrary("getSystemPerformance.dll") //必须是64位的dll
+	dllPath, err := getDllPath()
 	if err != nil {
-		log.Printf("load dll fail err=%s", err)
+		fmt.Printf("fail to get dll path, err=%s\n", err)
+		return
+	}
+
+	libHandle, err := syscall.LoadLibrary(dllPath) //必须是64位的dll
+	if err != nil {
+		fmt.Printf("load dll fail err=%s\n", err)
 		return
 	}
 	defer syscall.FreeLibrary(libHandle) //记得要释放dll
@@ -23,13 +31,13 @@ func main() {
 	//获取dll中的函数的地址
 	initFun, err := syscall.GetProcAddress(libHandle, "hebPerformanceInit")
 	if err != nil {
-		log.Printf("fail to get 'hebPerformanceInit' fun addr, err=%s", err)
+		log.Printf("fail to get 'hebPerformanceInit' fun addr, err=%s\n", err)
 		return
 	}
 
 	statusFun, err := syscall.GetProcAddress(libHandle, "hebGetPerformance")
 	if err != nil {
-		log.Printf("fail to get 'hebGetPerformance' fun addr, err=%s", err)
+		log.Printf("fail to get 'hebGetPerformance' fun addr, err=%s\n", err)
 		return
 	}
 
@@ -68,6 +76,35 @@ func main() {
 		}
 		fmt.Println("")
 	}
+}
+
+func getDllPath() (dllPath string, retErr error) {
+	dllName := "getSystemPerformance.dll"
+
+	exeDir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+	if err != nil {
+		retErr = fmt.Errorf("fail to get exe dir, err=%s", err)
+		return
+	}
+
+	dllPath = exeDir + "/" + dllName
+	if _, err := os.Stat(dllPath); nil == err {
+		return
+	}
+
+	dllPath, err = filepath.Abs(exeDir + "/../../../../../")
+	if err != nil {
+		retErr = fmt.Errorf("fail to get top dir, err=%s", err)
+		return
+	}
+
+	dllPath += "/out/x64/" + dllName
+	if _, err := os.Stat(dllPath); err != nil {
+		retErr = fmt.Errorf("fail to get dll path based top dir, err=%s", err)
+		return
+	}
+
+	return
 }
 
 func xmlStr2Obj(str *string, obj interface{}) (err error) {
