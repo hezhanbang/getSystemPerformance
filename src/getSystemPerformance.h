@@ -11,6 +11,6 @@
 #endif
 
 GETSYSTEMPERFORMANCE_API INT32 hebPerformanceInit();
-GETSYSTEMPERFORMANCE_API INT32 hebGetPerformance(char* outBuf, int outBufCap);
+GETSYSTEMPERFORMANCE_API INT32 hebGetPerformance(bool bUtf8, char* outBuf, int outBufCap);
 
 GETSYSTEMPERFORMANCE_API INT32 hebPerformanceTest(char* msg, char* outMsg, INT32 outCap);

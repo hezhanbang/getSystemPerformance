@@ -17,9 +17,9 @@ int main()
 
 	hebPerformanceInit();
 	for (;;) {
-		char result[300*10];
-		int ret = hebGetPerformance(result, sizeof(result));
-		if (0 == ret) {
+		char result[300 * 10];
+		int ret = hebGetPerformance(false, result, sizeof(result));
+		if (ret > 0) {
 			printf_s(result);
 		}
 		printf_s("\n\n");

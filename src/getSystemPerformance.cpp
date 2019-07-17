@@ -29,6 +29,16 @@ struct HebAllStatusInfo {
 
 HebAllStatusInfo* gHebStatus = nullptr;
 
+WCHAR* hebMulti2Wide_needDelete(const char* multiContent, unsigned int multiType) {
+
+	int i = MultiByteToWideChar(multiType, NULL, multiContent, strlen(multiContent), NULL, 0);
+	WCHAR *wideContent = new WCHAR[i + 1];
+	MultiByteToWideChar(multiType, NULL, multiContent, strlen(multiContent), wideContent, i);
+	wideContent[i] = '\0';
+
+	return wideContent;
+};
+
 char* hebWide2Multi_needDelete(const WCHAR* wideContent, unsigned int multiType) {
 
 	int i = WideCharToMultiByte(multiType, 0, wideContent, -1, NULL, 0, NULL, NULL);
@@ -38,6 +48,29 @@ char* hebWide2Multi_needDelete(const WCHAR* wideContent, unsigned int multiType)
 
 	return multiContent;
 };
+
+bool hebAnsi2Utf8(const char* src, char* utf8Buf, int utf8BufSize)
+{
+	if (!src || strlen(src) < 1 || !utf8Buf || utf8BufSize < 2)
+	{
+		return false;
+	}
+
+	WCHAR* wideStr = hebMulti2Wide_needDelete(src, CP_ACP);
+	char* utf8Str = hebWide2Multi_needDelete(wideStr, CP_UTF8);
+
+	if (strlen(utf8Str) + 1 > utf8BufSize)
+	{
+		delete(wideStr);
+		delete(utf8Str);
+		return false;
+	}
+	strcpy_s(utf8Buf, utf8BufSize, utf8Str);
+
+	delete(wideStr);
+	delete(utf8Str);
+	return true;
+}
 
 int hebMacToStr(char* destBuf, int destBufCap, UCHAR* mac, int macLen) {
 	if (nullptr == destBuf || nullptr == mac || macLen < 3) {
@@ -348,7 +381,8 @@ std::string hebFormatSpeed(double dSpeedByte) {
 	return t;
 }
 
-INT32 hebGetSpeed(std::chrono::time_point<std::chrono::system_clock> &startTime, std::chrono::time_point<std::chrono::system_clock> &endTime, std::string &result) {
+INT32 hebGetSpeed(std::chrono::time_point<std::chrono::system_clock> &startTime, std::chrono::time_point<std::chrono::system_clock> &endTime,
+	bool bUtf8, std::string &result) {
 	if (endTime <= startTime) {
 		return -1;
 	}
@@ -357,7 +391,8 @@ INT32 hebGetSpeed(std::chrono::time_point<std::chrono::system_clock> &startTime,
 
 	result = "<root>";
 	bool bHaveAdapter = false;
-	char str[512];
+	char oneDeviceResult[512];
+	char utf8Name[sizeof(gHebStatus->interfaces[0].name)];
 
 	for (int i = 0; i < gHebStatus->interfaceCount; i++) {
 		HebInterfaceInfo &statusInfo = gHebStatus->interfaces[i];
@@ -375,11 +410,18 @@ INT32 hebGetSpeed(std::chrono::time_point<std::chrono::system_clock> &startTime,
 
 		//printf_s("adapter[%s]: recvSpeed=%s, sendSpeed=%s\n", statusInfo.name, hebFormatSpeed(recvSpeedByte).c_str(), hebFormatSpeed(sendSpeedByte).c_str());
 
+		char* adapterName = statusInfo.name;
+		if (bUtf8) {
+			bool bRet = hebAnsi2Utf8(statusInfo.name, utf8Name, sizeof(utf8Name));
+			assert(bRet);
+			adapterName = utf8Name;
+		}
+
 		int len = sprintf_s(
-			str,
-			sizeof(str),
+			oneDeviceResult,
+			sizeof(oneDeviceResult),
 			"<adapter><name>%s</name><maxSpeedBit>%lu</maxSpeedBit><recvSpeed><bit>%lld</bit><str>%s</str></recvSpeed><sendSpeed><bit>%lld</bit><str>%s</str></sendSpeed></adapter>",
-			statusInfo.name,
+			adapterName,
 			statusInfo.MaxSpeedBps,
 			iRecvSpeedBit,
 			hebFormatSpeed(recvSpeedByte).c_str(),
@@ -387,8 +429,8 @@ INT32 hebGetSpeed(std::chrono::time_point<std::chrono::system_clock> &startTime,
 			hebFormatSpeed(sendSpeedByte).c_str()
 		);
 		assert(len + 5 < sizeof(str));
-		result += str;
 
+		result += oneDeviceResult;
 		bHaveAdapter = true;
 	}
 
@@ -404,7 +446,7 @@ GETSYSTEMPERFORMANCE_API INT32 hebPerformanceInit() {
 	return 0;
 }
 
-GETSYSTEMPERFORMANCE_API INT32 hebGetPerformance(char* outBuf, int outBufCap) {
+GETSYSTEMPERFORMANCE_API INT32 hebGetPerformance(bool bUtf8, char* outBuf, int outBufCap) {
 	if (nullptr == gHebStatus) {
 		return -1;
 	}
@@ -446,7 +488,7 @@ GETSYSTEMPERFORMANCE_API INT32 hebGetPerformance(char* outBuf, int outBufCap) {
 
 	//¼ÆËãËÙ¶È
 	std::string result = "";
-	hebGetSpeed(startTime, endTime, result);
+	hebGetSpeed(startTime, endTime, bUtf8, result);
 
 	int retLen = result.size();
 	if (outBufCap <= retLen) { //include '\0'
@@ -454,7 +496,7 @@ GETSYSTEMPERFORMANCE_API INT32 hebGetPerformance(char* outBuf, int outBufCap) {
 	}
 	strcpy_s(outBuf, outBufCap, result.c_str());
 
-	return 0;
+	return retLen;
 }
 
 GETSYSTEMPERFORMANCE_API INT32 hebPerformanceTest(char* msg, char* outMsg, INT32 outCap) {
