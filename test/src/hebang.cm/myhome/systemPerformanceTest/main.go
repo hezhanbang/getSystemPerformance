@@ -4,9 +4,7 @@ import "C"
 import (
 	"fmt"
 	"log"
-	"os"
 	"syscall"
-	"time"
 	"unsafe"
 )
 
@@ -32,9 +30,6 @@ func main() {
 		log.Printf("fail to get 'hebGetPerformance' fun addr, err=%s", err)
 		return
 	}
-
-	fmt.Println("wait..%d....", os.Getpid())
-	time.Sleep(20 * time.Second)
 
 	//初始化dll
 	retDll, _, _ := syscall.Syscall(uintptr(initFun), 0, 0, 0, 0)
