@@ -4,10 +4,32 @@
 #include "stdafx.h"
 #include "getSystemPerformance.h"
 
+struct HebInterfaceInfo {
+	char macAddr[56];
+	char name[240];
+	std::string allIP;
+	uint32_t MaxSpeedBps;
 
-bool gHebInited = false;
+	//开机到现在，统计到的流量。
+	bool bNowFlowDataValid;
+	DWORD dwNowTotalSendByte;
+	DWORD dwNowTotalRecvByte;
 
-char* Wide2Multi_needDelete(const WCHAR* wideContent, unsigned int multiType) {
+	bool bLastFlowDataValid;
+	DWORD dwLastTotalSendByte;
+	DWORD dwLastTotalRecvByte;
+};
+
+struct HebAllStatusInfo {
+	HebInterfaceInfo interfaces[20];
+	int interfaceCount;
+
+	std::chrono::time_point<std::chrono::system_clock> actionTime;
+};
+
+HebAllStatusInfo* gHebStatus = nullptr;
+
+char* hebWide2Multi_needDelete(const WCHAR* wideContent, unsigned int multiType) {
 
 	int i = WideCharToMultiByte(multiType, 0, wideContent, -1, NULL, 0, NULL, NULL);
 	char *multiContent = new char[i + 1];
@@ -17,11 +39,37 @@ char* Wide2Multi_needDelete(const WCHAR* wideContent, unsigned int multiType) {
 	return multiContent;
 };
 
+int hebMacToStr(char* destBuf, int destBufCap, UCHAR* mac, int macLen) {
+	if (nullptr == destBuf || nullptr == mac || macLen < 3) {
+		return 0;
+	}
+	if (destBufCap < macLen * 3) { //include '\0';
+		return 0;
+	}
+
+	char* cur = destBuf;
+	cur[0] = '\0';
+
+	for (int i = 0; i < (int)macLen; i++) {
+		if (i == (macLen - 1)) {
+			cur += sprintf_s(cur, destBuf + destBufCap - cur, "%.2X",
+				(int)mac[i]);
+		}
+		else {
+			cur += sprintf_s(cur, destBuf + destBufCap - cur, "%.2X-",
+				(int)mac[i]);
+		}
+	}
+
+	cur[0] = '\0';
+	return cur - destBuf;
+}
+
 void dumpOneInterface(PIP_ADAPTER_ADDRESSES pCurrAddresses) {
 	printf("\tAdapter name: %s\n", pCurrAddresses->AdapterName);
 
-	char* friendlyName = Wide2Multi_needDelete(pCurrAddresses->FriendlyName, CP_ACP);
-	char* description = Wide2Multi_needDelete(pCurrAddresses->Description, CP_ACP);
+	char* friendlyName = hebWide2Multi_needDelete(pCurrAddresses->FriendlyName, CP_ACP);
+	char* description = hebWide2Multi_needDelete(pCurrAddresses->Description, CP_ACP);
 
 	printf("\tFriendly name: %s\n", friendlyName); //在"ipconfig"上看到的网卡名称
 	printf("\tDescription: %s\n", description); //在"ipconfig /all"上看到的网卡描述。
@@ -44,7 +92,7 @@ void dumpOneInterface(PIP_ADAPTER_ADDRESSES pCurrAddresses) {
 
 	/*
 	物理地址，mac地址。
-	回环虚拟网卡，没有mac地址。
+	回环虚拟网卡，没有mac地址，下线的设备可能也会没有mac地址。
 	*/
 	if (pCurrAddresses->PhysicalAddressLength != 0) {
 		printf("\tPhysical address: ");
@@ -90,13 +138,79 @@ void dumpOneInterface(PIP_ADAPTER_ADDRESSES pCurrAddresses) {
 	printf("\n");
 }
 
-int hebInit() {
+int32_t handleOneInterface(PIP_ADAPTER_ADDRESSES pCurrAddresses, HebInterfaceInfo &oneInfo) {
+	//网卡类型，IfType==24，即IF_TYPE_SOFTWARE_LOOPBACK，A software loopback network interface.
+	if (IF_TYPE_SOFTWARE_LOOPBACK == pCurrAddresses->IfType) {
+		return -1;
+	}
+
+	/*
+	获取网卡的状态。
+	OperStatus==1，即IfOperStatusUp，The interface is up and able to pass packets.
+	*/
+	if (IfOperStatusUp != pCurrAddresses->OperStatus) {
+		return -2;
+	}
+
+	/*
+	物理地址，mac地址。
+	回环虚拟网卡，没有mac地址，下线的设备可能也会没有mac地址。
+	*/
+	int macStrLen = hebMacToStr(oneInfo.macAddr, sizeof(oneInfo.macAddr), pCurrAddresses->PhysicalAddress, pCurrAddresses->PhysicalAddressLength);
+	if (macStrLen <= 1) {
+		return -3;
+	}
+	assert(macStrLen + 5 <= sizeof(oneInfo.macAddr));
+
+	//在"ipconfig"上看到的网卡名称
+	char* friendlyName = hebWide2Multi_needDelete(pCurrAddresses->FriendlyName, CP_ACP);
+	int nameLen = strcpy_s(oneInfo.name, sizeof(oneInfo.name), friendlyName);
+	assert(nameLen + 5 <= sizeof(oneInfo.name));
+	delete(friendlyName);
+
+	//获取本网卡的多个本地IP地址
+	PIP_ADAPTER_UNICAST_ADDRESS pUnicast = pCurrAddresses->FirstUnicastAddress;
+	if (pUnicast != NULL) {
+		for (int i = 0; pUnicast != NULL; i++) {
+			if (AF_INET == pUnicast->Address.lpSockaddr->sa_family) {
+				char localIP[20];
+				sockaddr_in* sa_in = (sockaddr_in *)pUnicast->Address.lpSockaddr;
+				inet_ntop(AF_INET, &sa_in->sin_addr, localIP, sizeof(localIP));
+
+				oneInfo.allIP += localIP;
+				oneInfo.allIP += ",";
+			}
+
+			pUnicast = pUnicast->Next;
+		}
+
+		if ("" != oneInfo.allIP) {
+			oneInfo.allIP.pop_back();
+		}
+	}
+
+	/*
+	百兆网卡，即TransmitLinkSpeed和ReceiveLinkSpeed都等于100000000，
+	即100Mbps(Mbps = Mega(兆) bit per second)，即每秒钟能传送100M的比特位数据。
+
+	100000000 = 100,  000,  000
+	_________________|kBit |kBit|
+	_________________|    Mb    |
+	__________=  100 Mb
+	*/
+	assert(pCurrAddresses->ReceiveLinkSpeed == pCurrAddresses->TransmitLinkSpeed); //bit unit
+	oneInfo.MaxSpeedBps = pCurrAddresses->ReceiveLinkSpeed;
+
+	return 0;
+}
+
+int hebGetOnlineInterfaces() {
 	bool bOk = false;
 	ULONG Iterations = 0;
 	DWORD dwRetVal = 0;
 	ULONG outBufCap = 200;
 	PIP_ADAPTER_ADDRESSES pAddresses = NULL;
-#define MAX_TRIES 3
+	const int tryTimes = 3;
 
 	do {
 		pAddresses = (IP_ADAPTER_ADDRESSES *)malloc(outBufCap);
@@ -114,28 +228,231 @@ int hebInit() {
 			break;
 		}
 		Iterations++;
-	} while ((dwRetVal == ERROR_BUFFER_OVERFLOW) && (Iterations < MAX_TRIES));
+	} while ((dwRetVal == ERROR_BUFFER_OVERFLOW) && (Iterations < tryTimes));
 
 	assert(bOk);
 
 	//获取网卡带宽
 	PIP_ADAPTER_ADDRESSES pCurrAddresses = pAddresses;
+	gHebStatus->interfaceCount = 0;
+	HebInterfaceInfo* currInfo = gHebStatus->interfaces;
 
 	while (pCurrAddresses) {
-		dumpOneInterface(pCurrAddresses);
+		int ret = handleOneInterface(pCurrAddresses, *currInfo);
+		if (0 == ret) {
+			gHebStatus->interfaceCount++;
+			currInfo++;
+		}
 		pCurrAddresses = pCurrAddresses->Next;
 	}
+
 	return 0;
 }
 
-GETSYSTEMPERFORMANCE_API INT32 hebGetPerformance() {
-	if (false == gHebInited) {
-		int ret = hebInit();
-		assert(0 == ret);
-		gHebInited = true;
+int32_t hebGetCurrentFlowData() {
+	bool bOk = false;
+	ULONG Iterations = 0;
+	DWORD dwRetVal = 0;
+	ULONG outBufCap = 200;
+	PMIB_IFTABLE  pMibIfTable = NULL;
+	const int tryTimes = 3;
+
+	do {
+		pMibIfTable = (PMIB_IFTABLE)malloc(outBufCap);
+
+		//https://docs.microsoft.com/en-us/windows/win32/api/iphlpapi/nf-iphlpapi-getiftable
+		dwRetVal = GetIfTable(pMibIfTable, &outBufCap, TRUE);
+		if (ERROR_INSUFFICIENT_BUFFER == dwRetVal) {
+			free(pMibIfTable);
+			pMibIfTable = nullptr;
+		}
+		else {
+			if (NO_ERROR == dwRetVal) {
+				bOk = true;
+			}
+			break;
+		}
+		Iterations++;
+	} while ((dwRetVal == ERROR_INSUFFICIENT_BUFFER) && (Iterations < tryTimes));
+
+	assert(bOk);
+	//获取到网卡状态，记录下当前时间。
+	gHebStatus->actionTime = std::chrono::system_clock::now();
+
+
+	//统计全部网卡的流量统计信息
+	char curMac[56];
+	for (int i = 0; i != pMibIfTable->dwNumEntries; ++i)
+	{
+		MIB_IFROW &curInfo = pMibIfTable->table[i];
+
+		if (IF_TYPE_SOFTWARE_LOOPBACK == curInfo.dwType) {
+			continue;
+		}
+		if (curInfo.dwPhysAddrLen <= 0) {
+			assert(0 == curInfo.dwInOctets || 0 == curInfo.dwOutOctets);
+			continue;
+		}
+
+		//根据mac地址，找到状态上下文。
+		hebMacToStr(curMac, sizeof(curMac), curInfo.bPhysAddr, curInfo.dwPhysAddrLen);
+		for (int statusIndex = 0; statusIndex < gHebStatus->interfaceCount; statusIndex++) {
+
+			HebInterfaceInfo &statusInfo = gHebStatus->interfaces[statusIndex];
+
+			if (strcmp(curMac, statusInfo.macAddr) == 0) {
+				statusInfo.dwNowTotalRecvByte = curInfo.dwInOctets;
+				statusInfo.dwNowTotalSendByte = curInfo.dwOutOctets;
+				statusInfo.bNowFlowDataValid = true;
+				break;
+			}
+
+		}// end for iterator all device.
 	}
 
+	return 0;
+}
 
+std::string hebFormatSpeed(double dSpeedByte) {
+	if (dSpeedByte < 0) {
+		return "(-1)bps";
+	}
+	uint64_t uintSpeed = dSpeedByte * 8;
+	if (uintSpeed > 1000) {
+		uintSpeed += 1;
+	}
+
+	char t[16];
+	UINT32 based = 1000;
+	//UINT32 based = 1024;
+
+	if (uintSpeed < based) {
+		sprintf_s(t, sizeof(t), "%lubps", uintSpeed);
+	}
+	else if (uintSpeed < based * based) {
+		double dSpeedBit = uintSpeed*1.0 / based;
+		sprintf_s(t, sizeof(t), "%0.1fKbps", dSpeedBit);
+	}
+	else if (uintSpeed < based * based * based) {
+		double dSpeedBit = uintSpeed*1.0 / based / based;
+		sprintf_s(t, sizeof(t), "%0.2fMbps", dSpeedBit);
+	}
+	else if (uintSpeed < based * based * based * based) {
+		double dSpeedBit = uintSpeed*1.0 / based / based / based;
+		sprintf_s(t, sizeof(t), "%0.3fGbps", dSpeedBit);
+	}
+	else {
+		assert(false);
+	}
+
+	return t;
+}
+
+INT32 hebGetSpeed(std::chrono::time_point<std::chrono::system_clock> &startTime, std::chrono::time_point<std::chrono::system_clock> &endTime, std::string &result) {
+	if (endTime <= startTime) {
+		return -1;
+	}
+	std::chrono::duration<double> duration = endTime - startTime;
+	double diffTime = 1.0 /*duration.count()*/;
+
+	result = "<root>";
+	bool bHaveAdapter = false;
+	char str[512];
+
+	for (int i = 0; i < gHebStatus->interfaceCount; i++) {
+		HebInterfaceInfo &statusInfo = gHebStatus->interfaces[i];
+		if (false == statusInfo.bLastFlowDataValid || false == statusInfo.bNowFlowDataValid) {
+			continue;
+		}
+
+		int64_t diffRecv = statusInfo.dwNowTotalRecvByte - statusInfo.dwLastTotalRecvByte;
+		int64_t diffSend = statusInfo.dwNowTotalSendByte - statusInfo.dwLastTotalSendByte;
+
+		double recvSpeedByte = diffRecv * 8 / diffTime;
+		double sendSpeedByte = diffSend / diffTime;
+		int64_t iRecvSpeedBit = recvSpeedByte * 8;
+		int64_t iSendSpeedBit = sendSpeedByte * 8;
+
+		//printf_s("adapter[%s]: recvSpeed=%s, sendSpeed=%s\n", statusInfo.name, hebFormatSpeed(recvSpeedByte).c_str(), hebFormatSpeed(sendSpeedByte).c_str());
+
+		int len = sprintf_s(
+			str,
+			sizeof(str),
+			"<adapter><name>%s</name><maxSpeedBit>%lu</maxSpeedBit><recvSpeed><bit>%lld</bit><str>%s</str></recvSpeed><sendSpeed><bit>%lld</bit><str>%s</str></sendSpeed></adapter>",
+			statusInfo.name,
+			statusInfo.MaxSpeedBps,
+			iRecvSpeedBit,
+			hebFormatSpeed(recvSpeedByte).c_str(),
+			iSendSpeedBit,
+			hebFormatSpeed(sendSpeedByte).c_str()
+		);
+		assert(len + 5 < sizeof(str));
+		result += str;
+
+		bHaveAdapter = true;
+	}
+
+	result += "</root>";
+	return 0;
+}
+
+//接口函数
+GETSYSTEMPERFORMANCE_API INT32 hebPerformanceInit() {
+	gHebStatus = new HebAllStatusInfo();
+	gHebStatus->interfaceCount = 0;
+
+	return 0;
+}
+
+GETSYSTEMPERFORMANCE_API INT32 hebGetPerformance(char* outBuf, int outBufCap) {
+	if (nullptr == gHebStatus) {
+		return -1;
+	}
+	if (nullptr == outBuf || outBufCap < 20) {
+		return -2;
+	}
+	hebGetOnlineInterfaces();
+
+	//重置流量统计
+	for (int i = 0; i < gHebStatus->interfaceCount; i++) {
+		HebInterfaceInfo &statusInfo = gHebStatus->interfaces[i];
+
+		statusInfo.bLastFlowDataValid = false;
+		statusInfo.dwLastTotalRecvByte = 0;
+		statusInfo.dwLastTotalSendByte = 0;
+
+		statusInfo.bNowFlowDataValid = false;
+		statusInfo.dwNowTotalRecvByte = 0;
+		statusInfo.dwNowTotalSendByte = 0;
+	}
+
+	//统计流量
+	hebGetCurrentFlowData();
+	auto startTime = gHebStatus->actionTime;
+
+	for (int i = 0; i < gHebStatus->interfaceCount; i++) {
+		HebInterfaceInfo &statusInfo = gHebStatus->interfaces[i];
+
+		statusInfo.bLastFlowDataValid = statusInfo.bNowFlowDataValid;
+		statusInfo.dwLastTotalRecvByte = statusInfo.dwNowTotalRecvByte;
+		statusInfo.dwLastTotalSendByte = statusInfo.dwNowTotalSendByte;
+	}
+
+	::Sleep(1000); //休眠一秒
+
+	//统计流量
+	hebGetCurrentFlowData();
+	auto endTime = gHebStatus->actionTime;
+
+	//计算速度
+	std::string result = "";
+	hebGetSpeed(startTime, endTime, result);
+
+	int retLen = result.size();
+	if (outBufCap <= retLen) { //include '\0'
+		return -3;
+	}
+	strcpy_s(outBuf, outBufCap, result.c_str());
 
 	return 0;
 }

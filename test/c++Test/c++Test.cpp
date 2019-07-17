@@ -15,8 +15,16 @@ int main()
 	printf_s(outStr);
 	*/
 
-	hebGetPerformance();
-
+	hebPerformanceInit();
+	for (;;) {
+		char result[300*10];
+		int ret = hebGetPerformance(result, sizeof(result));
+		if (0 == ret) {
+			printf_s(result);
+		}
+		printf_s("\n\n");
+		Sleep(1000);
+	}
 	printf_s("done\n");
 	getchar();
 	return 0;
