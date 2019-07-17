@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"syscall"
-	"time"
 	"unsafe"
 )
 
@@ -68,8 +67,6 @@ func main() {
 			fmt.Printf("adapter[%s, %d] recvSpeed=%s, sendSpeed=%s\n", adapter.Name, adapter.MaxSpeedBit, adapter.RecvSpeed.Str, adapter.Sendpeed.Str)
 		}
 		fmt.Println("")
-
-		time.Sleep(time.Second * 2)
 	}
 }
 
