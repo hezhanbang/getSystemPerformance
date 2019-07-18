@@ -238,36 +238,36 @@ int32_t handleOneInterface(PIP_ADAPTER_ADDRESSES pCurrAddresses, HebInterfaceInf
 	return 0;
 }
 
+typedef std::unique_ptr<IP_ADAPTER_ADDRESSES, std::function<void(IP_ADAPTER_ADDRESSES*)> > hebAdapterBufHolder;
+
 int hebGetOnlineInterfaces() {
-	bool bOk = false;
 	ULONG Iterations = 0;
 	DWORD dwRetVal = 0;
 	ULONG outBufCap = 200;
-	PIP_ADAPTER_ADDRESSES pAddresses = NULL;
 	const int tryTimes = 3;
 
+	hebAdapterBufHolder adapterBufHolder;
+
 	do {
-		pAddresses = (IP_ADAPTER_ADDRESSES *)malloc(outBufCap);
+		hebAdapterBufHolder outBufHolder((IP_ADAPTER_ADDRESSES*)malloc(outBufCap), [](IP_ADAPTER_ADDRESSES* ptr) {
+			delete(ptr);
+			printf_s("delete outBufHolder in  hebGetOnlineInterfaces\n");
+		});
 
 		//https://docs.microsoft.com/en-us/windows/win32/api/iphlpapi/nf-iphlpapi-getadaptersaddresses
-		dwRetVal = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_PREFIX, NULL, pAddresses, &outBufCap);
-		if (ERROR_BUFFER_OVERFLOW == dwRetVal) {
-			free(pAddresses);
-			pAddresses = nullptr;
-		}
-		else {
-			if (NO_ERROR == dwRetVal) {
-				bOk = true;
-			}
+		dwRetVal = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_PREFIX, NULL, outBufHolder.get(), &outBufCap);
+		if (NO_ERROR == dwRetVal) {
+			adapterBufHolder = std::move(outBufHolder);
 			break;
 		}
+
 		Iterations++;
 	} while ((dwRetVal == ERROR_BUFFER_OVERFLOW) && (Iterations < tryTimes));
 
-	assert(bOk);
+	assert(adapterBufHolder);
 
 	//获取网卡带宽
-	PIP_ADAPTER_ADDRESSES pCurrAddresses = pAddresses;
+	PIP_ADAPTER_ADDRESSES pCurrAddresses = adapterBufHolder.get();
 	gHebStatus->interfaceCount = 0;
 	HebInterfaceInfo* currInfo = gHebStatus->interfaces;
 
@@ -283,42 +283,43 @@ int hebGetOnlineInterfaces() {
 	return 0;
 }
 
+typedef std::unique_ptr<MIB_IFTABLE, std::function<void(MIB_IFTABLE*)> > hebIfTableBufHolder;
+
 int32_t hebGetCurrentFlowData() {
-	bool bOk = false;
 	ULONG Iterations = 0;
 	DWORD dwRetVal = 0;
 	ULONG outBufCap = 200;
-	PMIB_IFTABLE  pMibIfTable = NULL;
 	const int tryTimes = 3;
 
+	hebIfTableBufHolder ifTableBufHolder;
+
 	do {
-		pMibIfTable = (PMIB_IFTABLE)malloc(outBufCap);
+		hebIfTableBufHolder outBufHolder((MIB_IFTABLE*)malloc(outBufCap), [](MIB_IFTABLE* ptr) {
+			delete(ptr);
+			printf_s("delete outBufHolder in  hebGetCurrentFlowData\n");
+		});
 
 		//https://docs.microsoft.com/en-us/windows/win32/api/iphlpapi/nf-iphlpapi-getiftable
-		dwRetVal = GetIfTable(pMibIfTable, &outBufCap, TRUE);
-		if (ERROR_INSUFFICIENT_BUFFER == dwRetVal) {
-			free(pMibIfTable);
-			pMibIfTable = nullptr;
-		}
-		else {
-			if (NO_ERROR == dwRetVal) {
-				bOk = true;
-			}
+		dwRetVal = GetIfTable(outBufHolder.get(), &outBufCap, TRUE);
+		if (NO_ERROR == dwRetVal) {
+			ifTableBufHolder = std::move(outBufHolder);
 			break;
 		}
+
 		Iterations++;
 	} while ((dwRetVal == ERROR_INSUFFICIENT_BUFFER) && (Iterations < tryTimes));
 
-	assert(bOk);
+	assert(ifTableBufHolder);
+
 	//获取到网卡状态，记录下当前时间。
 	gHebStatus->actionTime = std::chrono::system_clock::now();
 
 
 	//统计全部网卡的流量统计信息
 	char curMac[56];
-	for (int i = 0; i != pMibIfTable->dwNumEntries; ++i)
+	for (int i = 0; i != ifTableBufHolder->dwNumEntries; ++i)
 	{
-		MIB_IFROW &curInfo = pMibIfTable->table[i];
+		MIB_IFROW &curInfo = ifTableBufHolder->table[i];
 
 		if (IF_TYPE_SOFTWARE_LOOPBACK == curInfo.dwType) {
 			continue;

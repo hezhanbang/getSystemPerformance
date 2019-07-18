@@ -27,3 +27,5 @@
 #include <string>
 #include <chrono>
 #include <ctime>
+#include <memory>
+#include <functional>

@@ -62,6 +62,7 @@ func main() {
 
 		strLen := int(retDll)
 		jsonStr := string(outSlice[:strLen])
+		outSlice = nil
 		//fmt.Printf("%s\n", jsonStr)
 
 		data := allAdapterStatus{}
