@@ -10,7 +10,9 @@
 #define GETSYSTEMPERFORMANCE_API extern "C" __declspec(dllimport)
 #endif
 
-GETSYSTEMPERFORMANCE_API INT32 hebPerformanceInit();
-GETSYSTEMPERFORMANCE_API INT32 hebGetPerformance(bool bUtf8, char* outBuf, int outBufCap);
+GETSYSTEMPERFORMANCE_API INT32 hebPerformance_init();
+GETSYSTEMPERFORMANCE_API INT32 hebPerformance_networkInfo(bool bUtf8, char* outBuf, int outBufCap);
+GETSYSTEMPERFORMANCE_API INT32 hebPerformance_memoryInfo(unsigned int* usedPercent);
+GETSYSTEMPERFORMANCE_API INT32 hebPerformance_cpuInfo(unsigned int* usedPercent);
 
-GETSYSTEMPERFORMANCE_API INT32 hebPerformanceTest(char* msg, char* outMsg, INT32 outCap);
+GETSYSTEMPERFORMANCE_API INT32 hebPerformance_test(char* msg, char* outMsg, INT32 outCap);

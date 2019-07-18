@@ -29,15 +29,15 @@ func main() {
 	defer syscall.FreeLibrary(libHandle) //记得要释放dll
 
 	//获取dll中的函数的地址
-	initFun, err := syscall.GetProcAddress(libHandle, "hebPerformanceInit")
+	initFun, err := syscall.GetProcAddress(libHandle, "hebPerformance_init")
 	if err != nil {
-		log.Printf("fail to get 'hebPerformanceInit' fun addr, err=%s\n", err)
+		log.Printf("fail to get 'hebPerformance_init' fun addr, err=%s\n", err)
 		return
 	}
 
-	statusFun, err := syscall.GetProcAddress(libHandle, "hebGetPerformance")
+	statusFun, err := syscall.GetProcAddress(libHandle, "hebPerformance_networkInfo")
 	if err != nil {
-		log.Printf("fail to get 'hebGetPerformance' fun addr, err=%s\n", err)
+		log.Printf("fail to get 'hebPerformance_networkInfo' fun addr, err=%s\n", err)
 		return
 	}
 
@@ -56,7 +56,7 @@ func main() {
 
 		retDll, _, _ = syscall.Syscall(uintptr(statusFun), 3, 1, out, uintptr(sliceCap))
 		if retDll <= 0 {
-			log.Printf("fail to init 'getSystemPerformance.dll', ret=%d\n", retDll)
+			log.Printf("fail to get network info 'getSystemPerformance.dll', ret=%d\n", retDll)
 			return
 		}
 

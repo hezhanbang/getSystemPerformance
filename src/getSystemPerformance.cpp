@@ -27,7 +27,14 @@ struct HebAllStatusInfo {
 	std::chrono::time_point<std::chrono::system_clock> actionTime;
 };
 
-HebAllStatusInfo* gHebStatus = nullptr;
+struct HebCpuStatusInfo {
+	FILETIME m_prevKernelTime;
+	FILETIME m_prevUserTime;
+	FILETIME m_prevIdleTime;
+};
+
+HebAllStatusInfo* gHebNet = nullptr;
+HebCpuStatusInfo* gHebCpu = nullptr;
 
 WCHAR* hebMulti2Wide_needDelete(const char* multiContent, unsigned int multiType) {
 
@@ -268,13 +275,13 @@ int hebGetOnlineInterfaces() {
 
 	//获取网卡带宽
 	PIP_ADAPTER_ADDRESSES pCurrAddresses = adapterBufHolder.get();
-	gHebStatus->interfaceCount = 0;
-	HebInterfaceInfo* currInfo = gHebStatus->interfaces;
+	gHebNet->interfaceCount = 0;
+	HebInterfaceInfo* currInfo = gHebNet->interfaces;
 
 	while (pCurrAddresses) {
 		int ret = handleOneInterface(pCurrAddresses, *currInfo);
 		if (0 == ret) {
-			gHebStatus->interfaceCount++;
+			gHebNet->interfaceCount++;
 			currInfo++;
 		}
 		pCurrAddresses = pCurrAddresses->Next;
@@ -312,7 +319,7 @@ int32_t hebGetCurrentFlowData() {
 	assert(ifTableBufHolder);
 
 	//获取到网卡状态，记录下当前时间。
-	gHebStatus->actionTime = std::chrono::system_clock::now();
+	gHebNet->actionTime = std::chrono::system_clock::now();
 
 
 	//统计全部网卡的流量统计信息
@@ -331,9 +338,9 @@ int32_t hebGetCurrentFlowData() {
 
 		//根据mac地址，找到状态上下文。
 		hebMacToStr(curMac, sizeof(curMac), curInfo.bPhysAddr, curInfo.dwPhysAddrLen);
-		for (int statusIndex = 0; statusIndex < gHebStatus->interfaceCount; statusIndex++) {
+		for (int statusIndex = 0; statusIndex < gHebNet->interfaceCount; statusIndex++) {
 
-			HebInterfaceInfo &statusInfo = gHebStatus->interfaces[statusIndex];
+			HebInterfaceInfo &statusInfo = gHebNet->interfaces[statusIndex];
 
 			if (strcmp(curMac, statusInfo.macAddr) == 0) {
 				statusInfo.dwNowTotalRecvByte = curInfo.dwInOctets;
@@ -394,10 +401,10 @@ INT32 hebGetSpeed(std::chrono::time_point<std::chrono::system_clock> &startTime,
 	result = "<?xml version=\"1.0\"?><root>";
 	bool bHaveAdapter = false;
 	char oneDeviceResult[512];
-	char utf8Name[sizeof(gHebStatus->interfaces[0].name)];
+	char utf8Name[sizeof(gHebNet->interfaces[0].name)];
 
-	for (int i = 0; i < gHebStatus->interfaceCount; i++) {
-		HebInterfaceInfo &statusInfo = gHebStatus->interfaces[i];
+	for (int i = 0; i < gHebNet->interfaceCount; i++) {
+		HebInterfaceInfo &statusInfo = gHebNet->interfaces[i];
 		if (false == statusInfo.bLastFlowDataValid || false == statusInfo.bNowFlowDataValid) {
 			continue;
 		}
@@ -452,16 +459,22 @@ INT32 hebGetSpeed(std::chrono::time_point<std::chrono::system_clock> &startTime,
 	return 0;
 }
 
+int hebGetCurrentSystemTime() {
+	return 0;
+}
+
 //接口函数
-GETSYSTEMPERFORMANCE_API INT32 hebPerformanceInit() {
-	gHebStatus = new HebAllStatusInfo();
-	gHebStatus->interfaceCount = 0;
+GETSYSTEMPERFORMANCE_API INT32 hebPerformance_init() {
+	gHebNet = new HebAllStatusInfo();
+	gHebNet->interfaceCount = 0;
+
+	gHebCpu = new HebCpuStatusInfo();
 
 	return 0;
 }
 
-GETSYSTEMPERFORMANCE_API INT32 hebGetPerformance(bool bUtf8, char* outBuf, int outBufCap) {
-	if (nullptr == gHebStatus) {
+GETSYSTEMPERFORMANCE_API INT32 hebPerformance_networkInfo(bool bUtf8, char* outBuf, int outBufCap) {
+	if (nullptr == gHebNet) {
 		return -1;
 	}
 	if (nullptr == outBuf || outBufCap < 20) {
@@ -470,8 +483,8 @@ GETSYSTEMPERFORMANCE_API INT32 hebGetPerformance(bool bUtf8, char* outBuf, int o
 	hebGetOnlineInterfaces();
 
 	//重置流量统计
-	for (int i = 0; i < gHebStatus->interfaceCount; i++) {
-		HebInterfaceInfo &statusInfo = gHebStatus->interfaces[i];
+	for (int i = 0; i < gHebNet->interfaceCount; i++) {
+		HebInterfaceInfo &statusInfo = gHebNet->interfaces[i];
 
 		statusInfo.bLastFlowDataValid = false;
 		statusInfo.dwLastTotalRecvByte = 0;
@@ -484,10 +497,10 @@ GETSYSTEMPERFORMANCE_API INT32 hebGetPerformance(bool bUtf8, char* outBuf, int o
 
 	//统计流量
 	hebGetCurrentFlowData();
-	auto startTime = gHebStatus->actionTime;
+	auto startTime = gHebNet->actionTime;
 
-	for (int i = 0; i < gHebStatus->interfaceCount; i++) {
-		HebInterfaceInfo &statusInfo = gHebStatus->interfaces[i];
+	for (int i = 0; i < gHebNet->interfaceCount; i++) {
+		HebInterfaceInfo &statusInfo = gHebNet->interfaces[i];
 
 		statusInfo.bLastFlowDataValid = statusInfo.bNowFlowDataValid;
 		statusInfo.dwLastTotalRecvByte = statusInfo.dwNowTotalRecvByte;
@@ -498,7 +511,7 @@ GETSYSTEMPERFORMANCE_API INT32 hebGetPerformance(bool bUtf8, char* outBuf, int o
 
 	//统计流量
 	hebGetCurrentFlowData();
-	auto endTime = gHebStatus->actionTime;
+	auto endTime = gHebNet->actionTime;
 
 	//计算速度
 	std::string result = "";
@@ -514,7 +527,47 @@ GETSYSTEMPERFORMANCE_API INT32 hebGetPerformance(bool bUtf8, char* outBuf, int o
 	return retLen;
 }
 
-GETSYSTEMPERFORMANCE_API INT32 hebPerformanceTest(char* msg, char* outMsg, INT32 outCap) {
+GETSYSTEMPERFORMANCE_API INT32 hebPerformance_memoryInfo(unsigned int* usedPercent) {
+	if (nullptr == usedPercent) {
+		return -1;
+	}
+
+	MEMORYSTATUSEX memInfo;
+	memInfo.dwLength = sizeof(MEMORYSTATUSEX);
+	if (!GlobalMemoryStatusEx(&memInfo)) {
+		return -2;
+	}
+
+	//[0,101)
+	double availPercent = (memInfo.ullAvailPhys*1.0 / memInfo.ullTotalPhys)*100.0;
+	int32_t used = 100 - availPercent;
+	if (used < 0) {
+		used = 100;
+	}
+
+	*usedPercent = used;
+	return 0;
+}
+
+GETSYSTEMPERFORMANCE_API INT32 hebPerformance_cpuInfo(unsigned int* usedPercent) {
+	if (nullptr == gHebCpu) {
+		return -1;
+	}
+	if (nullptr == usedPercent) {
+		return -2;
+	}
+
+	FILETIME ftSysIdle, ftSysKernel, ftSysUser;
+	if (!GetSystemTimes(&ftSysIdle, &ftSysKernel, &ftSysUser)) {
+		return -3;
+	}
+
+
+
+	return 0;
+}
+
+GETSYSTEMPERFORMANCE_API INT32 hebPerformance_test(char* msg, char* outMsg, INT32 outCap) {
 	if (nullptr == msg || nullptr == outMsg || outCap < 100) {
 		return -1;
 	}

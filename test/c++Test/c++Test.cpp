@@ -15,13 +15,30 @@ int main()
 	printf_s(outStr);
 	*/
 
-	hebPerformanceInit();
+	hebPerformance_init();
 	for (;;) {
 		char result[300 * 10];
-		int ret = hebGetPerformance(false, result, sizeof(result));
+
+		//network flow speed
+		int ret = hebPerformance_networkInfo(false, result, sizeof(result));
 		if (ret > 0) {
 			printf_s(result);
 		}
+
+		//memory usage
+		UINT32 usedMemory = 0;
+		ret = hebPerformance_memoryInfo(&usedMemory);
+		if (ret > 0) {
+			printf_s("memory: %d%%, ", usedMemory);
+		}
+
+		//cpu usage
+		UINT32 usedCpu = 0;
+		ret = hebPerformance_cpuInfo(&usedCpu);
+		if (ret > 0) {
+			printf_s("cpu: %d%%\n", usedCpu);
+		}
+
 		printf_s("\n\n");
 		Sleep(1000);
 	}
