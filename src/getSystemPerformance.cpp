@@ -510,6 +510,7 @@ GETSYSTEMPERFORMANCE_API INT32 hebGetPerformance(bool bUtf8, char* outBuf, int o
 	}
 	strcpy_s(outBuf, outBufCap, result.c_str());
 
+	std::string().swap(result);
 	return retLen;
 }
 
