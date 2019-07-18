@@ -258,7 +258,7 @@ int hebGetOnlineInterfaces() {
 	do {
 		hebAdapterBufHolder outBufHolder((IP_ADAPTER_ADDRESSES*)malloc(outBufCap), [](IP_ADAPTER_ADDRESSES* ptr) {
 			delete(ptr);
-			printf_s("delete outBufHolder in  hebGetOnlineInterfaces\n");
+			printf_s("delete outBufHolder in hebGetOnlineInterfaces\n");
 		});
 
 		//https://docs.microsoft.com/en-us/windows/win32/api/iphlpapi/nf-iphlpapi-getadaptersaddresses
@@ -287,6 +287,11 @@ int hebGetOnlineInterfaces() {
 		pCurrAddresses = pCurrAddresses->Next;
 	}
 
+	//对于已经失效的网口，重置其ip字段
+	for (int i = gHebNet->interfaceCount; i < sizeof(gHebNet->interfaces) / sizeof(gHebNet->interfaces[0]); i++) {
+		gHebNet->interfaces[i].allIP = "";
+	}
+
 	return 0;
 }
 
@@ -303,7 +308,7 @@ int32_t hebGetCurrentFlowData() {
 	do {
 		hebIfTableBufHolder outBufHolder((MIB_IFTABLE*)malloc(outBufCap), [](MIB_IFTABLE* ptr) {
 			delete(ptr);
-			printf_s("delete outBufHolder in  hebGetCurrentFlowData\n");
+			printf_s("delete outBufHolder in hebGetCurrentFlowData\n");
 		});
 
 		//https://docs.microsoft.com/en-us/windows/win32/api/iphlpapi/nf-iphlpapi-getiftable
@@ -353,6 +358,16 @@ int32_t hebGetCurrentFlowData() {
 	}
 
 	return 0;
+}
+
+int32_t hebGetByteDiff(DWORD now, DWORD last) {
+	assert(4 == sizeof(DWORD));
+
+	if (now >= last) {
+		return now - last;
+	}
+
+	return MAXDWORD - last + 1 + now; //wrap around
 }
 
 std::string hebFormatSpeed(double dSpeedByte) {
@@ -409,24 +424,14 @@ INT32 hebGetSpeed(std::chrono::time_point<std::chrono::system_clock> &startTime,
 			continue;
 		}
 
-		int64_t diffRecvByte = statusInfo.dwNowTotalRecvByte - statusInfo.dwLastTotalRecvByte;
-		int64_t diffSendByte = statusInfo.dwNowTotalSendByte - statusInfo.dwLastTotalSendByte;
+		int32_t diffRecvByte = hebGetByteDiff(statusInfo.dwNowTotalRecvByte, statusInfo.dwLastTotalRecvByte);
+		int32_t diffSendByte = hebGetByteDiff(statusInfo.dwNowTotalSendByte, statusInfo.dwLastTotalSendByte);
+		assert(diffRecvByte >= 0 && diffSendByte >= 0);
 
 		double recvSpeedByte = diffRecvByte / diffTime;
 		double sendSpeedByte = diffSendByte / diffTime;
 		int64_t iRecvSpeedBit = recvSpeedByte * 8;
 		int64_t iSendSpeedBit = sendSpeedByte * 8;
-
-		if (diffRecvByte < 0) {
-			diffRecvByte = -1;
-			recvSpeedByte = -1;
-			iRecvSpeedBit = -1;
-		}
-		if (diffSendByte < 0) {
-			diffSendByte = -1;
-			sendSpeedByte = -1;
-			iSendSpeedBit = -1;
-		}
 
 		//printf_s("adapter[%s]: recvSpeed=%s, sendSpeed=%s\n", statusInfo.name, hebFormatSpeed(recvSpeedByte).c_str(), hebFormatSpeed(sendSpeedByte).c_str());
 
