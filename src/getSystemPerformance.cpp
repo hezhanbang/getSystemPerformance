@@ -36,7 +36,7 @@ struct HebCpuStatusInfo {
 HebAllStatusInfo* gHebNet = nullptr;
 HebCpuStatusInfo* gHebCpu = nullptr;
 
-WCHAR* hebMulti2Wide_needDelete(const char* multiContent, unsigned int multiType) {
+WCHAR* hebMulti2Wide_needDeleteArray(const char* multiContent, unsigned int multiType) {
 
 	int i = MultiByteToWideChar(multiType, NULL, multiContent, strlen(multiContent), NULL, 0);
 	WCHAR *wideContent = new WCHAR[i + 1];
@@ -46,7 +46,7 @@ WCHAR* hebMulti2Wide_needDelete(const char* multiContent, unsigned int multiType
 	return wideContent;
 };
 
-char* hebWide2Multi_needDelete(const WCHAR* wideContent, unsigned int multiType) {
+char* hebWide2Multi_needDeleteArray(const WCHAR* wideContent, unsigned int multiType) {
 
 	int i = WideCharToMultiByte(multiType, 0, wideContent, -1, NULL, 0, NULL, NULL);
 	char *multiContent = new char[i + 1];
@@ -63,19 +63,19 @@ bool hebAnsi2Utf8(const char* src, char* utf8Buf, int utf8BufSize)
 		return false;
 	}
 
-	WCHAR* wideStr = hebMulti2Wide_needDelete(src, CP_ACP);
-	char* utf8Str = hebWide2Multi_needDelete(wideStr, CP_UTF8);
+	WCHAR* wideStr = hebMulti2Wide_needDeleteArray(src, CP_ACP);
+	char* utf8Str = hebWide2Multi_needDeleteArray(wideStr, CP_UTF8);
 
 	if (strlen(utf8Str) + 1 > utf8BufSize)
 	{
-		delete(wideStr);
-		delete(utf8Str);
+		delete[] wideStr;
+		delete[] utf8Str;
 		return false;
 	}
 	strcpy_s(utf8Buf, utf8BufSize, utf8Str);
 
-	delete(wideStr);
-	delete(utf8Str);
+	delete[] wideStr;
+	delete[] utf8Str;
 	return true;
 }
 
@@ -108,14 +108,14 @@ int hebMacToStr(char* destBuf, int destBufCap, UCHAR* mac, int macLen) {
 void dumpOneInterface(PIP_ADAPTER_ADDRESSES pCurrAddresses) {
 	printf("\tAdapter name: %s\n", pCurrAddresses->AdapterName);
 
-	char* friendlyName = hebWide2Multi_needDelete(pCurrAddresses->FriendlyName, CP_ACP);
-	char* description = hebWide2Multi_needDelete(pCurrAddresses->Description, CP_ACP);
+	char* friendlyName = hebWide2Multi_needDeleteArray(pCurrAddresses->FriendlyName, CP_ACP);
+	char* description = hebWide2Multi_needDeleteArray(pCurrAddresses->Description, CP_ACP);
 
 	printf("\tFriendly name: %s\n", friendlyName); //在"ipconfig"上看到的网卡名称
 	printf("\tDescription: %s\n", description); //在"ipconfig /all"上看到的网卡描述。
 
-	delete(friendlyName);
-	delete(description);
+	delete[] friendlyName;
+	delete[] description;
 
 	/*
 	网卡类型
@@ -203,10 +203,10 @@ int32_t handleOneInterface(PIP_ADAPTER_ADDRESSES pCurrAddresses, HebInterfaceInf
 	assert(macStrLen + 5 <= sizeof(oneInfo.macAddr));
 
 	//在"ipconfig"上看到的网卡名称
-	char* friendlyName = hebWide2Multi_needDelete(pCurrAddresses->FriendlyName, CP_ACP);
+	char* friendlyName = hebWide2Multi_needDeleteArray(pCurrAddresses->FriendlyName, CP_ACP);
 	int nameLen = strcpy_s(oneInfo.name, sizeof(oneInfo.name), friendlyName);
 	assert(nameLen + 5 <= sizeof(oneInfo.name));
-	delete(friendlyName);
+	delete[] friendlyName;
 
 	//获取本网卡的多个本地IP地址
 	oneInfo.allIP = "";
