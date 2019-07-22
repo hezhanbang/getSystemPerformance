@@ -257,7 +257,7 @@ int hebGetOnlineInterfaces() {
 
 	do {
 		hebAdapterBufHolder outBufHolder((IP_ADAPTER_ADDRESSES*)malloc(outBufCap), [](IP_ADAPTER_ADDRESSES* ptr) {
-			delete(ptr);
+			free(ptr);
 			printf_s("delete outBufHolder in hebGetOnlineInterfaces\n");
 		});
 
@@ -307,7 +307,7 @@ int32_t hebGetCurrentFlowData() {
 
 	do {
 		hebIfTableBufHolder outBufHolder((MIB_IFTABLE*)malloc(outBufCap), [](MIB_IFTABLE* ptr) {
-			delete(ptr);
+			free(ptr);
 			printf_s("delete outBufHolder in hebGetCurrentFlowData\n");
 		});
 
