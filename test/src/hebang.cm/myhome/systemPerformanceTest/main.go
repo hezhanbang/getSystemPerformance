@@ -23,7 +23,7 @@ func main() {
 
 	libHandle, err := syscall.LoadLibrary(dllPath) //必须是64位的dll
 	if err != nil {
-		fmt.Printf("load dll fail err=%s\n", err)
+		fmt.Printf("fail to load dll, err=%s\n", err)
 		return
 	}
 	defer syscall.FreeLibrary(libHandle) //记得要释放dll
